@@ -1485,6 +1485,10 @@ const CANNON_DIRECTIONS = {
   lr: { clubs: "right", spades: "down" },
 };
 
+// Game configuration
+let friction = 0.5; // Default friction value
+let roundup = false; // Default round up/down setting
+
 // Calculate grid size based on number of players using logarithmic scaling
 function calculateGridSize(numPlayers) {
   if (numPlayers <= 2) return BASE_GRID_SIZE;
@@ -1696,6 +1700,51 @@ if (typeof networkManager !== "undefined") {
         }
       }
     },
+    // Add handler for receiving moves from the host
+    onExecuteMoves: (data) => {
+      if (countdownTimer) {
+        cancelCountdown();
+      }
+
+      clearTimeout(turnTimer);
+      const existingTimer = document.getElementById("turn-timer");
+      if (existingTimer) {
+        existingTimer.remove();
+      }
+
+      // Execute moves for host
+      if (isHost) {
+        data.moves.forEach((move) => {
+          moveBoat(move.playerName, move.direction, move.value);
+        });
+
+        // After movement phase, signal clients to start next phase
+        setTimeout(() => {
+          if (networkManager?.getSocket()) {
+            networkManager.getSocket().emit("start-next-phase");
+          }
+        }, 2000); // Wait for movements to complete
+      }
+    },
+    onStartNextPhase: () => {
+      if (isMobileUser && !isHost) {
+        // Clear any floating cards
+        const floatingCards = document.querySelectorAll(".game-card.selected");
+        floatingCards.forEach((card) => card.remove());
+
+        // Reset state and deal new hand
+        confirmedCards.clear();
+        playerReadyForNextRound.clear();
+        dealStartingHand();
+
+        // Show the card hand
+        const cardHand = document.getElementById("card-hand");
+        if (cardHand) {
+          cardHand.classList.add("show");
+          cardHand.style.display = "block";
+        }
+      }
+    },
   });
 }
 
@@ -1734,14 +1783,21 @@ function dealStartingHand() {
 
   // Clear any existing cards
   cardsContainer.innerHTML = "";
-  playerHand = [];
   selectedCards = [];
 
-  // Deal random cards
-  for (let i = 0; i < STARTING_HAND_SIZE; i++) {
-    const suit = CARD_SUITS[Math.floor(Math.random() * CARD_SUITS.length)];
-    const value = CARD_VALUES[Math.floor(Math.random() * CARD_VALUES.length)];
-    const card = createCard(suit, value);
+  // If we have remaining cards from last round, use those
+  if (playerHand.length === 0) {
+    // Deal fresh cards only if we don't have any left
+    for (let i = 0; i < STARTING_HAND_SIZE; i++) {
+      const suit = CARD_SUITS[Math.floor(Math.random() * CARD_SUITS.length)];
+      const value = CARD_VALUES[Math.floor(Math.random() * CARD_VALUES.length)];
+      playerHand.push({ suit, value });
+    }
+  }
+
+  // Display all cards in hand
+  playerHand.forEach((cardData, i) => {
+    const card = createCard(cardData.suit, cardData.value);
 
     // Position cards so they overlap but all are visible
     const leftOffset = i * 10 + "vw"; // Adjust spacing between cards
@@ -1751,8 +1807,7 @@ function dealStartingHand() {
     card.addEventListener("click", () => toggleCardSelection(card));
 
     cardsContainer.appendChild(card);
-    playerHand.push({ suit, value });
-  }
+  });
 
   // Show the card hand container
   cardHand.classList.add("show");
@@ -1770,10 +1825,11 @@ function toggleCardSelection(card) {
     );
   }
 
-  // Update confirm button state
+  // Update confirm button state - now always enabled to allow skipping
   const confirmButton = document.getElementById("confirm-cards");
   if (confirmButton) {
-    confirmButton.disabled = selectedCards.length === 0;
+    confirmButton.textContent =
+      selectedCards.length === 0 ? "Skip Turn" : "Confirm Cards";
   }
 }
 
@@ -1796,13 +1852,33 @@ function getMovementDirection(suit, position) {
   }
 }
 
-window.moveBoat = function (playerName, direction) {
+function translateCardValue(value) {
+  switch (value) {
+    case "A":
+      return 1;
+    case "J":
+      return 11;
+    case "Q":
+      return 12;
+    case "K":
+      return 13;
+    default:
+      return parseInt(value, 10);
+  }
+}
+
+window.moveBoat = function (playerName, direction, moveValue) {
   const boatDiv = document.getElementById(`boat-${playerName}`);
   if (!boatDiv) return;
 
   const currentLeft = parseFloat(boatDiv.style.left);
   const currentTop = parseFloat(boatDiv.style.top);
-  const moveAmount = SQUARE_SIZE;
+
+  // Apply friction to movement
+  let moveAmount = SQUARE_SIZE * moveValue * friction;
+
+  // Round the movement according to setting
+  moveAmount = roundup ? Math.ceil(moveAmount) : Math.floor(moveAmount);
 
   switch (direction) {
     case "up":
@@ -1820,46 +1896,116 @@ window.moveBoat = function (playerName, direction) {
   }
 };
 
+function showSkipConfirmation(callback) {
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    z-index: 2000;
+    text-align: center;
+  `;
+  modal.innerHTML = `
+    <h3 style="font-size: 3rem;">Skip Turn?</h3>
+    <p style="font-size: 2rem;">Are you sure you want to skip your turn?</p>
+    <button id="skip-confirm" style="margin: 5px; padding: 5px 10px; background: #44AA44; color: white; border: none; border-radius: 5px; font-size: 2rem;">Yes, Skip</button>
+    <button id="skip-cancel" style="margin: 5px; padding: 5px 10px; background: #AA4444; color: white; border: none; border-radius: 5px; font-size: 2rem;">No, Go Back</button>
+  `;
+
+  document.body.appendChild(modal);
+
+  document.getElementById("skip-confirm").onclick = () => {
+    modal.remove();
+    callback(true);
+  };
+  document.getElementById("skip-cancel").onclick = () => {
+    modal.remove();
+    callback(false);
+  };
+}
+
 function confirmCardSelection() {
   const cardsContainer = document.getElementById("cards-container");
   if (!cardsContainer) return;
 
-  // Visual feedback for selected cards
-  const selectedElements = cardsContainer.querySelectorAll(
-    ".game-card.selected"
-  );
-  selectedElements.forEach((card, index) => {
-    const centerOffset = 50 - (selectedElements.length - 1) * 5 + index * 10;
-    card.style.left = centerOffset + "vw";
-    card.style.bottom = "40vh";
-    card.style.transform = "scale(1.2)";
-    card.style.zIndex = "1000";
-    card.style.pointerEvents = "none";
-  });
+  // If no cards selected, show skip confirmation
+  if (selectedCards.length === 0) {
+    showSkipConfirmation((confirmed) => {
+      if (confirmed) {
+        finishCardConfirmation(cardsContainer, []);
+      }
+    });
+    return;
+  }
 
-  // Remove unselected cards
-  const unselectedElements = cardsContainer.querySelectorAll(
-    ".game-card:not(.selected)"
-  );
-  unselectedElements.forEach((card) => {
-    card.style.opacity = "0";
-    setTimeout(() => card.remove(), 300);
-  });
+  finishCardConfirmation(cardsContainer, selectedCards);
+}
 
-  // Store confirmed cards and notify server
-  confirmedCards.set(
-    currentPlayerName,
-    selectedCards.map((card) => ({ ...card }))
-  );
-  playerReadyForNextRound.set(currentPlayerName, true);
+function finishCardConfirmation(cardsContainer, selectedCardsToConfirm) {
+  // Store the unselected cards for later
+  const unselectedCards = Array.from(
+    cardsContainer.querySelectorAll(".game-card:not(.selected)")
+  ).map((card) => ({
+    suit: card.dataset.suit,
+    value: card.dataset.value,
+  }));
 
-  if (networkManager?.getSocket()) {
-    networkManager.getSocket().emit("cards-confirmed", {
-      cards: selectedCards,
+  // Update playerHand to only contain unselected cards
+  playerHand = unselectedCards;
+
+  if (selectedCardsToConfirm.length > 0) {
+    // Visual feedback for selected cards
+    const selectedElements = cardsContainer.querySelectorAll(
+      ".game-card.selected"
+    );
+    selectedElements.forEach((card, index) => {
+      card.style.position = "fixed";
+      const centerOffset =
+        50 - (selectedCardsToConfirm.length - 1) * 5 + index * 10;
+      card.style.left = centerOffset + "vw";
+      card.style.top = "40vh";
+      card.style.transform = "scale(1.2)";
+      card.style.zIndex = "1000";
+      card.style.pointerEvents = "none";
+      card.style.transition = "all 0.3s ease";
     });
   }
 
-  // Disable the confirm button
+  // Remove unselected cards immediately
+  const unselectedElements = cardsContainer.querySelectorAll(
+    ".game-card:not(.selected)"
+  );
+  unselectedElements.forEach((card) => card.remove());
+
+  // Store confirmed cards locally
+  const confirmedCardData = selectedCardsToConfirm.map((card) => ({ ...card }));
+  confirmedCards.set(currentPlayerName, confirmedCardData);
+  playerReadyForNextRound.set(currentPlayerName, true);
+
+  // Notify server about card confirmation
+  if (networkManager?.getSocket()) {
+    networkManager.getSocket().emit("cards-confirmed", {
+      playerName: currentPlayerName,
+      cards: confirmedCardData,
+    });
+  }
+
+  // If this is the host, check if everyone has confirmed
+  if (isHost) {
+    const allConfirmed = Array.from(players).every((player) =>
+      playerReadyForNextRound.has(player.name)
+    );
+    if (allConfirmed) {
+      processTurn();
+    }
+  }
+
+  // Update confirm button
   const confirmButton = document.getElementById("confirm-cards");
   if (confirmButton) {
     confirmButton.disabled = true;
@@ -1867,7 +2013,13 @@ function confirmCardSelection() {
 }
 
 function startTurnTimer() {
+  // Clear any existing timer and display
   clearTimeout(turnTimer);
+  const existingTimer = document.getElementById("turn-timer");
+  if (existingTimer) {
+    existingTimer.remove();
+  }
+
   turnTimer = setTimeout(processTurn, TURN_TIMER);
 
   // Update UI to show remaining time
@@ -1887,14 +2039,32 @@ function startTurnTimer() {
     if (remaining > 0) {
       timerDisplay.textContent = Math.ceil(remaining / 1000);
       requestAnimationFrame(updateTimer);
+    } else {
+      timerDisplay.remove();
     }
   };
   updateTimer();
 }
 
 function processTurn() {
+  // Clear any existing timers
+  if (countdownTimer) {
+    cancelCountdown();
+  }
+  clearTimeout(turnTimer);
+  const existingTimer = document.getElementById("turn-timer");
+  if (existingTimer) {
+    existingTimer.remove();
+  }
+
+  // Clear any floating confirmed cards
+  const floatingCards = document.querySelectorAll(".game-card.selected");
+  floatingCards.forEach((card) => card.remove());
+
   if (isHost) {
     const moves = [];
+
+    // Process all confirmed cards (from mobile clients only)
     for (const [playerName, cards] of confirmedCards) {
       cards.forEach((card) => {
         for (const [position, directions] of Object.entries(
@@ -1903,7 +2073,13 @@ function processTurn() {
           if (directions[card.suit]) {
             const moveDirection = getMovementDirection(card.suit, position);
             if (moveDirection) {
-              moves.push({ playerName, direction: moveDirection });
+              // Translate the card value to a number for movement
+              const moveValue = translateCardValue(card.value);
+              moves.push({
+                playerName,
+                direction: moveDirection,
+                value: moveValue,
+              });
             }
           }
         }
@@ -1915,18 +2091,32 @@ function processTurn() {
       networkManager.getSocket().emit("execute-moves", { moves });
     }
 
-    // Execute moves locally
-    moves.forEach((move) => moveBoat(move.playerName, move.direction));
+    // Execute moves on the display
+    moves.forEach((move) =>
+      moveBoat(move.playerName, move.direction, move.value)
+    );
 
-    // Reset for next turn
+    // Reset state for next turn
     confirmedCards.clear();
     playerReadyForNextRound.clear();
-    startTurnTimer();
-  }
 
-  // For all clients
-  if (currentPlayerName) {
-    dealStartingHand();
+    // Start the timer for the next round
+    startTurnTimer();
+  } else if (isMobileUser) {
+    // Only mobile clients deal new hands - movement handled by onExecuteMoves
+    setTimeout(() => {
+      // Clear any remaining floating cards first
+      const floatingCards = document.querySelectorAll(".game-card.selected");
+      floatingCards.forEach((card) => card.remove());
+
+      dealStartingHand();
+      // Make sure the card hand is visible
+      const cardHand = document.getElementById("card-hand");
+      if (cardHand) {
+        cardHand.classList.add("show");
+        cardHand.style.display = "block"; // Ensure it's visible
+      }
+    }, 5500); // Wait for the floating cards animation to finish (5s + 0.5s buffer)
   }
 }
 
@@ -1958,35 +2148,38 @@ function startGame() {
     currentTrack = null; // Clear current track
   }
 
-  if (isMobileUser && !isHost) {
-    const nicknameInput = document.getElementById("nickname");
-    const readyWrapper = document.getElementById("ready-wrapper");
-    const suitSquares = document.getElementById("suit-squares");
-    const settingsButton = document.getElementById("settings-button");
-    const settingsDiv = document.getElementById("settings-div");
-
-    if (nicknameInput) nicknameInput.style.display = "none";
-    if (readyWrapper) readyWrapper.style.display = "none";
-    if (suitSquares) suitSquares.style.display = "none";
-    if (settingsButton) settingsButton.style.display = "none";
-    if (settingsDiv) settingsDiv.style.display = "none";
-  } else {
-    // For host and desktop clients, or if it's a general game start scenario
+  if (isHost) {
+    // Host is display only - start background music and timer
     playBackgroundMusic(
       "./assets/audio/background_music.mp3",
       0.4,
       musicVolume,
       209.4
     );
+    startTurnTimer();
+  } else {
+    // Only mobile clients get cards and game UI
+    if (isMobileUser) {
+      const nicknameInput = document.getElementById("nickname");
+      const readyWrapper = document.getElementById("ready-wrapper");
+      const suitSquares = document.getElementById("suit-squares");
+      const settingsButton = document.getElementById("settings-button");
+      const settingsDiv = document.getElementById("settings-div");
+
+      if (nicknameInput) nicknameInput.style.display = "none";
+      if (readyWrapper) readyWrapper.style.display = "none";
+      if (suitSquares) suitSquares.style.display = "none";
+      if (settingsButton) settingsButton.style.display = "none";
+      if (settingsDiv) settingsDiv.style.display = "none";
+
+      // Deal cards to mobile players
+      dealStartingHand();
+    }
   }
-  dealStartingHand(); // Deal cards when game starts
 
   // Initialize game state
   confirmedCards.clear();
   playerReadyForNextRound.clear();
-
-  // Start the first turn timer
-  startTurnTimer();
 
   console.log("Game starting!");
 }

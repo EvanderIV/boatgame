@@ -158,6 +158,37 @@ io.on("connection", (client) => {
     }
   });
 
+  // Handle move execution from host
+  client.on("execute-moves", (data) => {
+    if (!roomCode) return;
+
+    const room = activeRooms.get(roomCode);
+    if (!room || !room.turnInProgress) return;
+
+    // Only host can execute moves
+    if (client.id !== room.hostId) return;
+
+    // Broadcast moves to all clients in the room
+    io.to(roomCode).emit("execute-moves", data);
+  });
+
+  // Handle next phase initiation from host
+  client.on("start-next-phase", () => {
+    if (!roomCode) return;
+
+    const room = activeRooms.get(roomCode);
+    if (!room || !room.turnInProgress) return;
+
+    // Only host can start next phase
+    if (client.id !== room.hostId) return;
+
+    // Reset confirmed cards for next turn
+    room.confirmedCards.clear();
+
+    // Broadcast next phase start to all clients in the room
+    io.to(roomCode).emit("start-next-phase");
+  });
+
   // Handle player info updates (nickname and skin changes)
   client.on("updatePlayerInfo", (data) => {
     if (!roomCode) return;

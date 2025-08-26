@@ -502,6 +502,26 @@ if (typeof networkManager !== "undefined") {
       // New handler for host disconnection
       resetGameState();
     },
+    onPlayerCardsConfirmed: (playerName, cards) => {
+      if (isHost) {
+        confirmedCards.set(playerName, cards);
+        playerReadyForNextRound.set(playerName, true);
+
+        // Check if all players have confirmed
+        const allPlayersConfirmed = Array.from(players).every((player) =>
+          playerReadyForNextRound.has(player.name)
+        );
+
+        if (allPlayersConfirmed) {
+          processTurn();
+        }
+      }
+    },
+    onAllCardsConfirmed: () => {
+      if (isHost) {
+        processTurn();
+      }
+    },
   });
 } else {
   console.warn("networkManager is not defined. Callbacks not set.");

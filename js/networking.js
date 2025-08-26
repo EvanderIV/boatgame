@@ -323,15 +323,18 @@ window.networkManager = {
     }
   },
   setCallbacks: (callbacks) => {
-    // Set all callbacks
-    onPlayerJoined = callbacks.onPlayerJoined;
-    onPlayerLeft = callbacks.onPlayerLeft;
-    onReadyStateUpdate = callbacks.onReadyStateUpdate;
-    onPlayerInfoUpdate = callbacks.onPlayerInfoUpdate;
-    onGameStarting = callbacks.onGameStarting;
-    onRoomClosed = callbacks.onRoomClosed;
+    // Preserve existing callbacks if they exist
+    onPlayerJoined = callbacks.onPlayerJoined || onPlayerJoined;
+    onPlayerLeft = callbacks.onPlayerLeft || onPlayerLeft;
+    onReadyStateUpdate = callbacks.onReadyStateUpdate || onReadyStateUpdate;
+    onPlayerInfoUpdate = callbacks.onPlayerInfoUpdate || onPlayerInfoUpdate;
+    onGameStarting = callbacks.onGameStarting || onGameStarting;
+    onRoomClosed = callbacks.onRoomClosed || onRoomClosed;
+    onPlayerCardsConfirmed =
+      callbacks.onPlayerCardsConfirmed || onPlayerCardsConfirmed;
+    onAllCardsConfirmed = callbacks.onAllCardsConfirmed || onAllCardsConfirmed;
 
-    // After setting callbacks, re-setup event handlers to ensure they're using the new callbacks
+    // After setting callbacks, re-setup event handlers
     setupSocketEventHandlers();
   },
 };

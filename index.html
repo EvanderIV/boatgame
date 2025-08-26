@@ -21,6 +21,7 @@
 		</div>
 		<div id="root" class="root flex column">
 			<div id="sqr">
+				<div id="game-grid" class="desktop-only"></div>
 				<div id="boat_ur_container" class="boat-container">
 					<img id="boat_ur" class="mobile-only playerBoat" src="./assets/boats/1/ur.png" style="left: 49.9%; top: 18.01cqw; z-index: 10;">
 					<img src="./img/arrow_retro.png" id="right-arrow" class="direction-arrow right-arrow darkable themeable">
@@ -43,6 +44,10 @@
 				<div class="suit-square darkable themeable" data-suit="diamonds">&diamondsuit;</div>
 				<div class="suit-square darkable themeable" data-suit="clubs">&clubsuit;</div>
 				<div class="suit-square darkable themeable" data-suit="spades">&spadesuit;</div>
+			</div>
+			<div id="card-hand" class="mobile-only darkable themeable">
+				<div id="cards-container"></div>
+				<button id="confirm-cards" class="darkable themeable retro" disabled>CONFIRM CARDS</button>
 			</div>
 			<input id="nickname" class="mobile-only single-line-textarea darkable themeable retro" style="margin-top: 16cqw; height: 12cqw; width: 60%;" type="text" name="nickname-input" placeholder="Nickname" maxlength="20"></input>
 			<input id="game-code" class="input-uppercase mobile-only single-line-textarea darkable themeable retro" style="margin-top: 2cqw; height: 8cqw;" type="search" name="game-code-input" placeholder="Room Code" maxlength="4"></input>

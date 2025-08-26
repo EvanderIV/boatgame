@@ -948,7 +948,7 @@ input:disabled {
 }
 
 #suit-squares.show {
-    display: grid !important;
+    display: grid;
     visibility: visible;
     opacity: 1;
 }
@@ -1161,5 +1161,153 @@ input:disabled {
 .ready-text.darkmode {
     color: #FFFFFF;
 }
+
+/* Card System Styles */
+#card-hand {
+    position: fixed;
+    bottom: 2vh;
+    left: 0;
+    width: 100%;
+    height: 30vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2vh;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+}
+
+#card-hand.show {
+    visibility: visible;
+    opacity: 1;
+}
+
+#cards-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    height: 80%;
+    width: 100%;
+    padding: 0 5vw;
+    position: relative;
+}
+
+.game-card {
+    width: 15vw;
+    height: 22vw;
+    background-color: #FFFFFF;
+    border: 2px solid #999999;
+    border-radius: 8px;
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8vw;
+    transition: transform 0.3s ease;
+    transform-origin: bottom center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.game-card.darkmode {
+    background-color: #666666;
+    border-color: #222222;
+    color: #FFFFFF;
+}
+
+.game-card.retro {
+    border-radius: 0;
+}
+
+.game-card.selected {
+    transform: translateY(-5vh);
+}
+
+.game-card[data-suit="hearts"],
+.game-card[data-suit="diamonds"] {
+    color: #FF0000;
+}
+
+.game-card.darkmode[data-suit="hearts"],
+.game-card.darkmode[data-suit="diamonds"] {
+    color: #FF6666;
+}
+
+@keyframes cardHover {
+    0%, 100% { transform: translateY(-5vh); }
+    50% { transform: translateY(-6vh); }
+}
+
+.game-card.selected {
+    animation: cardHover 2s ease-in-out infinite;
+}
+
+#confirm-cards {
+    height: 15%;
+    padding: 10px 20px;
+    font-size: 2rem;
+    border: 2px solid #0088CC;
+    background-color: #22BBFF;
+    color: #ffffff;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+#confirm-cards.retro {
+    font-family: "blocky";
+    font-size: 2.5rem;
+    border-radius: 0;
+}
+
+#confirm-cards:disabled {
+    background-color: #CCCCCC;
+    border-color: #999999;
+    color: #666666;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+#confirm-cards.darkmode {
+    background-color: #666666;
+    border-color: #222222;
+    color: #FFFFFF;
+}
+
+#confirm-cards.darkmode:disabled {
+    background-color: #444444;
+    border-color: #222222;
+    color: #888888;
+}
+
+#confirm-cards:not(:disabled):hover {
+    background-color: #33CCFF;
+}
+
+#game-grid {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+}
+
+.boat {
+    position: absolute;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    transition: all 0.3s ease;
+}
+
+.boat-corner {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.boat-corner.ur { grid-area: 1 / 2 / 2 / 3; }
+.boat-corner.ul { grid-area: 1 / 1 / 2 / 2; }
+.boat-corner.lr { grid-area: 2 / 2 / 3 / 3; }
+.boat-corner.ll { grid-area: 2 / 1 / 3 / 2; }
 
 
